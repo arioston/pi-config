@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=./hook-status.sh
+. "${SCRIPT_DIR}/hook-status.sh"
+
+if [ "$#" -lt 3 ]; then
+  echo "usage: session-end-worker <payload-file> <status-file> <project-root>" >&2
+  exit 1
+fi
+
+PAYLOAD_FILE="$1"
+STATUS_FILE="$2"
+PROJECT_ROOT="$3"
+
+SESSION_ID="$(jq -r '.session_id // empty' "$PAYLOAD_FILE")"
+if [ -z "$SESSION_ID" ]; then
+  write_hook_status "$STATUS_FILE" "session-end" "unknown" "$PROJECT_ROOT" "failed" "missing-session-id" "payload missing session_id"
+  exit 1
+fi
+
+write_hook_status "$STATUS_FILE" "session-end" "$SESSION_ID" "$PROJECT_ROOT" "running"
+
+if [ -n "${PI_SESSION_END_COMMAND:-}" ]; then
+  if ! PI_SESSION_END_PAYLOAD_FILE="$PAYLOAD_FILE" PI_SESSION_END_PROJECT_ROOT="$PROJECT_ROOT" bash -lc "$PI_SESSION_END_COMMAND"; then
+    write_hook_status "$STATUS_FILE" "session-end" "$SESSION_ID" "$PROJECT_ROOT" "failed" "downstream-command-failed" "PI_SESSION_END_COMMAND failed"
+    exit 1
+  fi
+fi
+
+write_hook_status "$STATUS_FILE" "session-end" "$SESSION_ID" "$PROJECT_ROOT" "done"

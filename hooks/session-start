@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# SessionStart hook for pi-config supervisor package
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Read supervisor skill content
+supervisor_content=$(cat "${PLUGIN_ROOT}/skills/supervisor/SKILL.md" 2>&1 || echo "Error reading supervisor skill")
+
+# Escape string for JSON embedding
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+supervisor_escaped=$(escape_for_json "$supervisor_content")
+session_context="You have a supervisor system for managing subagents in tmux.\n\n**Below is the supervisor skill — your guide to spawning and managing agents:**\n\n${supervisor_escaped}"
+
+# Output context injection — platform-aware
+if [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+else
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context"
+fi
+
+exit 0

@@ -1,0 +1,50 @@
+{
+  "name": "pi-config",
+  "version": "0.1.0",
+  "description": "Supervisor-managed subagent orchestration for Pi — spawn agents in tmux with automatic stall detection and respawn.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi",
+    "pi-coding-agent",
+    "pi-package",
+    "supervisor",
+    "subagent",
+    "tmux"
+  ],
+  "files": [
+    "extensions/",
+    "skills/",
+    "agents/",
+    "hooks/",
+    "docs/",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-ai": ">=0.63.2",
+    "@mariozechner/pi-coding-agent": ">=0.63.2",
+    "@sinclair/typebox": ">=0.34.49",
+    "pi-provider-kiro": "file:../pi-provider-kiro"
+  }
+}

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# SessionEnd hook for pi-config — writes status, snapshots payloads, and background-handoffs transcript-sized work.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# shellcheck source=./lib/hook-status.sh
+. "${SCRIPT_DIR}/lib/hook-status.sh"
+# shellcheck source=./lib/project-guard.sh
+. "${SCRIPT_DIR}/lib/project-guard.sh"
+
+PAYLOAD="$(cat || true)"
+SESSION_ID="$(printf '%s' "$PAYLOAD" | jq -r '.session_id // empty')"
+HOOK_CWD="$(printf '%s' "$PAYLOAD" | jq -r '.cwd // empty')"
+TRANSCRIPT_PATH="$(printf '%s' "$PAYLOAD" | jq -r '.transcript_path // empty')"
+
+if [ -z "$SESSION_ID" ]; then
+  exit 0
+fi
+
+EXPECTED_PROJECT_ROOT="${PI_PROJECT_ROOT:-}"
+if [ -z "$EXPECTED_PROJECT_ROOT" ] && [ -n "$HOOK_CWD" ] && [ -d "$HOOK_CWD" ]; then
+  EXPECTED_PROJECT_ROOT="$(cd "$HOOK_CWD" && pwd -P)"
+fi
+
+if ! PROJECT_ROOT="$(guard_project_cwd "$HOOK_CWD" "$EXPECTED_PROJECT_ROOT")"; then
+  exit 0
+fi
+
+STATUS_FILE="$(hook_status_path "$PROJECT_ROOT" "$SESSION_ID")"
+PAYLOAD_FILE="$(hook_payload_snapshot_path "$PROJECT_ROOT" "$SESSION_ID")"
+CURRENT_STATE="$(read_hook_state "$STATUS_FILE" 2>/dev/null || true)"
+
+case "$CURRENT_STATE" in
+  done|queued|running)
+    exit 0
+    ;;
+esac
+
+ensure_parent_dir "$PAYLOAD_FILE"
+printf '%s\n' "$PAYLOAD" > "$PAYLOAD_FILE"
+
+if [ -n "$TRANSCRIPT_PATH" ]; then
+  write_hook_status "$STATUS_FILE" "session-end" "$SESSION_ID" "$PROJECT_ROOT" "queued"
+  (
+    PI_PROJECT_ROOT="$PROJECT_ROOT" \
+      "${SCRIPT_DIR}/lib/session-end-worker" "$PAYLOAD_FILE" "$STATUS_FILE" "$PROJECT_ROOT"
+  ) >/dev/null 2>&1 &
+  disown || true
+  exit 0
+fi
+
+"${SCRIPT_DIR}/lib/session-end-worker" "$PAYLOAD_FILE" "$STATUS_FILE" "$PROJECT_ROOT"
